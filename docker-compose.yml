@@ -1,19 +1,8 @@
 version: "3.8"
 
-networks:
-  server_network:
-    driver: bridge
-
 services:
-  # ==============================================================================
-  # Centralized Zero-Impact Backup Daemon & TUI
-  # Can be pulled directly from GHCR (ghcr.io/OWNER/backapp:latest) or built locally
-  # ==============================================================================
   backapp:
-    image: ${BACKAPP_IMAGE:-ghcr.io/kahmeng/backapp:latest}
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/kahmeng/backapp:latest
     container_name: backapp
     restart: unless-stopped
     cap_add:
@@ -22,103 +11,33 @@ services:
       - BACKUP_JOBS_DIR=/etc/backup/jobs
       - BACKAPP_SOCKET_PATH=/var/run/backapp/backapp.sock
       - LOG_LEVEL=INFO
+
       # Discord / Slack webhook for automated notifications (backup start, success, failure)
       - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL:-}
-      # Shared credentials used by hooks / database dump clients across servers
+
+      # Shared credentials used by hooks / database dump clients across remote servers
       - RCON_PASS=${RCON_PASS:-secret_rcon_pass}
       - PGPASSWORD=${PGPASSWORD:-postgres_password}
       - MYSQL_PWD=${MYSQL_PWD:-mysql_root_password}
+
+    # Allows backapp to reach servers running directly on the host or other local containers
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
     volumes:
       # Job configuration files for all servers
       - ./examples:/etc/backup/jobs:ro
+
       # Centralized target storage for all compressed archives (.tar.zst, .dump.zst, .sql.zst)
       - ./backups:/mnt/backups
-      # Multi-server data directories mounted read-only for zero-impact streaming
+
+      # Multi-server source directories mounted read-only for zero-impact streaming
+      # Point these to wherever your external servers store their data:
       - ./data/servers/mc_survival:/data/servers/mc_survival:ro
       - ./data/servers/mc_creative:/data/servers/mc_creative:ro
+
       # IPC socket volume for interactive TUI and CLI connections
       - backapp_socket:/var/run/backapp
-    networks:
-      - server_network
-
-  # ==============================================================================
-  # Server 1: Minecraft Survival Server
-  # ==============================================================================
-  mc_survival:
-    image: itzg/minecraft-server:latest
-    container_name: mc_survival
-    restart: unless-stopped
-    environment:
-      - EULA=TRUE
-      - TYPE=PAPER
-      - VERSION=1.20.4
-      - MEMORY=2G
-      - ENABLE_RCON=true
-      - RCON_PASSWORD=${RCON_PASS:-secret_rcon_pass}
-      - RCON_PORT=25575
-    volumes:
-      - ./data/servers/mc_survival:/data
-    ports:
-      - "25565:25565"
-    networks:
-      - server_network
-
-  # ==============================================================================
-  # Server 2: Minecraft Creative / Lobby Server
-  # ==============================================================================
-  mc_creative:
-    image: itzg/minecraft-server:latest
-    container_name: mc_creative
-    restart: unless-stopped
-    environment:
-      - EULA=TRUE
-      - TYPE=PAPER
-      - VERSION=1.20.4
-      - MEMORY=2G
-      - ENABLE_RCON=true
-      - RCON_PASSWORD=${RCON_PASS:-secret_rcon_pass}
-      - RCON_PORT=25575
-    volumes:
-      - ./data/servers/mc_creative:/data
-    ports:
-      - "25566:25565"
-    networks:
-      - server_network
-
-  # ==============================================================================
-  # Server 3: PostgreSQL Database Server
-  # ==============================================================================
-  postgres_db:
-    image: postgres:16-alpine
-    container_name: postgres_db
-    restart: unless-stopped
-    environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=${PGPASSWORD:-postgres_password}
-      - POSTGRES_DB=prod_db
-    volumes:
-      - ./data/servers/postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
-    networks:
-      - server_network
-
-  # ==============================================================================
-  # Server 4: MySQL / MariaDB Database Server
-  # ==============================================================================
-  mysql_db:
-    image: mysql:8.0
-    container_name: mysql_db
-    restart: unless-stopped
-    environment:
-      - MYSQL_ROOT_PASSWORD=${MYSQL_PWD:-mysql_root_password}
-      - MYSQL_DATABASE=production_db
-    volumes:
-      - ./data/servers/mysql_data:/var/lib/mysql
-    ports:
-      - "3306:3306"
-    networks:
-      - server_network
 
 volumes:
   backapp_socket:
