@@ -1,0 +1,6 @@
+# Dummy Level Data for world
+level_name=world
+seed=123456789
+spawn_x=0
+spawn_y=64
+spawn_z=0

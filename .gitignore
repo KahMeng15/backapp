@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+backups/
+backmc.egg-info/
+*.sock
+*.tmp
+.DS_Store

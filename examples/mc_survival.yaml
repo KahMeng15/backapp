@@ -1,0 +1,14 @@
+# /etc/backup/jobs/mc_survival.yaml
+name: "mc_survival"
+schedule: "0 */4 * * *"
+format: "tar.zst" # tar.gz, tar.zst, zip
+source_dir: "/data/minecraft_world"
+output_dir: "/mnt/backups/minecraft"
+retention:
+  keep_last: 10
+hooks:
+  pre:
+    - 'rcon-cli -H mc_srv -P 25575 -p "$RCON_PASS" "save-off"'
+    - 'rcon-cli -H mc_srv -P 25575 -p "$RCON_PASS" "save-all flush"'
+  post:
+    - 'rcon-cli -H mc_srv -P 25575 -p "$RCON_PASS" "save-on"'

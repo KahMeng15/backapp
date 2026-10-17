@@ -1,0 +1,34 @@
+version: "3.8"
+
+services:
+  backmc:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: backmc:latest
+    container_name: backmc
+    restart: unless-stopped
+    cap_add:
+      - SYS_ADMIN # Optional: allows ionice -c 3 (idle I/O class) priority
+    environment:
+      - BACKUP_JOBS_DIR=/etc/backup/jobs
+      - BACKMC_SOCKET_PATH=/var/run/backmc/backmc.sock
+      - LOG_LEVEL=INFO
+      # Database and Minecraft credentials used by job hooks / dump commands
+      - RCON_PASS=${RCON_PASS:-secret_rcon_pass}
+      - PGPASSWORD=${PGPASSWORD:-postgres}
+      - MYSQL_PWD=${MYSQL_PWD:-root}
+    volumes:
+      # Mount directory containing *.yaml backup job specifications
+      - ./examples:/etc/backup/jobs:ro
+      # Storage target for standard .tar.zst, .tar.gz, .zip, .dump.zst files
+      - ./backups:/mnt/backups
+      # Minecraft world or local filesystem source directories
+      - ./data/minecraft_world:/data/minecraft_world:ro
+      # IPC socket volume for interactive TUI / CLI connections
+      - backmc_socket:/var/run/backmc
+    networks:
+      - default
+
+volumes:
+  backmc_socket:

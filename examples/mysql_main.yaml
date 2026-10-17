@@ -1,0 +1,16 @@
+# /etc/backup/jobs/mysql_main.yaml
+name: "mysql_main"
+schedule: "0 3 * * *"
+type: "mysql" # or mariadb
+host: "mysql_srv"
+port: 3306
+user: "root"
+password_env: "MYSQL_ROOT_PASSWORD"
+database: "production_db"
+format: "sql.zst" # or sql.gz
+output_dir: "/mnt/backups/mysql"
+retention:
+  keep_last: 14
+extra_args:
+  - "--single-transaction"
+  - "--quick"
