@@ -188,3 +188,38 @@ def test_empty_source_dir_error(tmp_path: Path):
     assert result.success is False
     assert "empty" in result.error_message.lower()
 
+
+def test_zip_exit_18_tolerance(tmp_path: Path, monkeypatch):
+    src_dir = tmp_path / "server"
+    src_dir.mkdir()
+    (src_dir / "world.txt").write_text("world data")
+    out_dir = tmp_path / "backups_zip"
+
+    job = JobConfig(
+        name="test_zip_live",
+        format="zip",
+        source_dir=src_dir,
+        output_dir=out_dir,
+    )
+    engine = BackupEngine()
+
+    # Mock subprocess.run for zip to return code 18, but actually create a valid zip
+    real_run = subprocess.run
+
+    def mock_run(cmd, *args, **kwargs):
+        res = real_run(cmd, *args, **kwargs)
+        if isinstance(cmd, list) and "zip" in cmd:
+            return subprocess.CompletedProcess(
+                args=cmd,
+                returncode=18,
+                stdout="zip warning: could not open for reading: temp.log\n",
+                stderr="zip warning: No such file or directory\n",
+            )
+        return res
+
+    monkeypatch.setattr(subprocess, "run", mock_run)
+    result = engine.execute_job(job)
+    assert result.success is True
+    assert result.output_file.exists()
+
+

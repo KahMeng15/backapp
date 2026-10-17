@@ -281,6 +281,8 @@ class BackupEngine:
             err = tar_stderr.decode("utf-8", errors="replace").strip()
             if p_tar.returncode > 1 or "error" in err.lower():
                 raise BackupExecutionError(f"tar command failed with code {p_tar.returncode}: {err}")
+        elif p_tar.returncode == 1:
+            logger.warning("tar reported non-fatal warning (exit code 1: some files were modified or deleted while being read on live server). Archive created successfully.")
 
         if p_comp.returncode != 0:
             err = comp_stderr.decode("utf-8", errors="replace").strip()
@@ -291,7 +293,8 @@ class BackupEngine:
         if not shutil.which("zip"):
             raise BackupExecutionError("zip utility not found in PATH.")
 
-        zip_cmd = list(priority) + ["zip", "-q", "-r", str(tmp_path.resolve()), "."]
+        # -y stores symbolic links as symlinks instead of failing on unresolvable referents
+        zip_cmd = list(priority) + ["zip", "-q", "-r", "-y", str(tmp_path.resolve()), "."]
         for exc in job.exclude:
             zip_cmd.extend(["-x", exc])
 
@@ -304,8 +307,27 @@ class BackupEngine:
         )
         if proc.returncode != 0:
             err = proc.stderr.strip() or proc.stdout.strip()
+
+            # Exit code 18: Info-ZIP warning when files were modified, removed, or unreadable during read pass.
+            # Very common on live servers (logs rotating, temp caches, session locks).
+            # If the archive was created and passes unzip -t integrity verification, treat as a non-fatal warning.
+            if proc.returncode == 18 and tmp_path.exists() and tmp_path.stat().st_size > 0:
+                t_proc = subprocess.run(
+                    ["unzip", "-t", "-q", str(tmp_path.resolve())],
+                    capture_output=True,
+                    text=True,
+                )
+                if t_proc.returncode == 0:
+                    logger.warning(
+                        "zip completed with non-fatal warning (code 18: temporary files modified/removed during live backup). Archive integrity verified."
+                    )
+                    return
+                else:
+                    err = f"{err} (archive integrity check failed: {t_proc.stderr.strip() or t_proc.stdout.strip()})"
+
             if proc.returncode == 12:
                 err = err or "Nothing to do (source directory has no matching files or all files were excluded)"
+
             raise BackupExecutionError(f"zip command failed with code {proc.returncode}: {err}")
 
     def _stream_database_or_command(
