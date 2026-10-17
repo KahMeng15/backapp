@@ -1,8 +1,6 @@
-version: "3.8"
-
 services:
   backapp:
-    image: ghcr.io/kahmeng/backapp:latest
+    image: ghcr.io/kahmeng15/backmc:latest
     container_name: backapp
     restart: unless-stopped
     cap_add:

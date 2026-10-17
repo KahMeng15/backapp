@@ -1,12 +1,11 @@
-# 🛡️ backapp
+# backapp
 
-**A production-ready, zero-impact backup daemon and interactive TUI for multi-server environments (Minecraft, PostgreSQL, MySQL) packaged in Docker and published to GHCR.**
-
+**A zero-impact backup daemon and interactive TUI for multi-server environments (Minecraft, PostgreSQL, MySQL) packaged in Docker.**
 Designed specifically for production servers, game servers, and database clusters where game tick latency and database transaction throughput must never be compromised by background backups.
 
 ---
 
-## 🌟 Key Features
+## Key Features
 
 ### 1. Zero-Impact & Ultra-Low Resource Footprint
 - **0.0% CPU When Idle**: Asynchronous scheduler driven by `croniter` that sleeps precisely until the next job is due.
@@ -28,7 +27,7 @@ Designed specifically for production servers, game servers, and database cluster
 ### 3. Pre-built GHCR Container Image
 - Ready to pull from GitHub Container Registry:
   ```bash
-  docker pull ghcr.io/kahmeng/backapp:latest
+  docker pull ghcr.io/kahmeng15/backmc:latest
   ```
 - Automated multi-arch build (`linux/amd64`, `linux/arm64`) with GitHub Actions workflow in `.github/workflows/docker-publish.yml`.
 
@@ -91,7 +90,7 @@ version: "3.8"
 
 services:
   backapp:
-    image: ghcr.io/kahmeng/backapp:latest
+    image: ghcr.io/kahmeng15/backmc:latest
     container_name: backapp
     restart: unless-stopped
     cap_add:
