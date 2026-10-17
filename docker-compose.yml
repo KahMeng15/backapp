@@ -1,3 +1,5 @@
+version: "3.8"
+
 services:
   backapp:
     image: ghcr.io/kahmeng/backapp:latest
@@ -6,20 +8,36 @@ services:
     cap_add:
       - SYS_ADMIN # Allows ionice -c 3 (idle I/O class) priority
     environment:
+      - LOG_LEVEL=INFO
+
       # Discord / Slack webhook for automated notifications (backup start, success, failure)
       - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL:-}
 
-      # Credentials used by hooks / database dump clients across remote servers
+      # Shared credentials used by hooks / database dump clients across servers
       - RCON_PASS=${RCON_PASS:-secret_rcon_pass}
       - PGPASSWORD=${PGPASSWORD:-postgres_password}
       - MYSQL_PWD=${MYSQL_PWD:-mysql_root_password}
 
     volumes:
-      # Job configuration files
+      # Job configuration files for all servers
       - ./examples:/etc/backup/jobs:ro
 
-      # Centralized target storage for all compressed archives
+      # Centralized target storage for all compressed archives (.tar.zst, .dump.zst, .sql.zst)
       - ./backups:/mnt/backups
 
-      # Server data directories mounted read-only for zero-impact streaming
-      - ./data/servers:/data/servers:ro
+      # Multi-server data directories mounted read-only for zero-impact streaming
+      - ./data/servers/mc_survival:/data/servers/mc_survival:ro
+      - ./data/servers/mc_creative:/data/servers/mc_creative:ro
+
+      # IPC socket volume for interactive TUI and CLI connections
+      - backapp_socket:/var/run/backapp
+
+    networks:
+      - server_network
+
+networks:
+  server_network:
+    driver: bridge
+
+volumes:
+  backapp_socket:
