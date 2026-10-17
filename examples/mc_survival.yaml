@@ -63,12 +63,13 @@ notifications:
   on_failure: true  # Notify with red alert embed if backup fails
 
 # Pre/Post hooks (guaranteed finally execution for save-on)
+# Can target ANY remote IP address (e.g. 192.168.1.100), domain, or host.docker.internal:
 hooks:
   pre:
-    - 'rcon-cli -H mc_srv -P 25575 -p "$RCON_PASS" "save-off"'
-    - 'rcon-cli -H mc_srv -P 25575 -p "$RCON_PASS" "save-all flush"'
+    - 'rcon-cli -H 192.168.1.100 -P 25575 -p "$RCON_PASS" "save-off"'
+    - 'rcon-cli -H 192.168.1.100 -P 25575 -p "$RCON_PASS" "save-all flush"'
   post:
-    - 'rcon-cli -H mc_srv -P 25575 -p "$RCON_PASS" "save-on"'
+    - 'rcon-cli -H 192.168.1.100 -P 25575 -p "$RCON_PASS" "save-on"'
 
 exclude:
   - "*.lock"

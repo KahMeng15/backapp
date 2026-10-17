@@ -9,7 +9,8 @@ name: "mysql_main"
 schedule: "0 3 * * *"
 
 type: "mysql" # or mariadb
-host: "mysql_db"
+# Target remote MySQL server by IP address (e.g. 192.168.1.60 or host.docker.internal)
+host: "192.168.1.60"
 port: 3306
 user: "root"
 password_env: "MYSQL_ROOT_PASSWORD"

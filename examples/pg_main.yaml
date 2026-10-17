@@ -30,5 +30,6 @@ notifications:
   on_success: true
   on_failure: true
 
-command: "pg_dump -h postgres_db -U postgres -d prod_db -Fc"
+# Target remote PostgreSQL server by IP address (e.g. 192.168.1.50 or host.docker.internal)
+command: "pg_dump -h 192.168.1.50 -p 5432 -U postgres -d prod_db -Fc"
 output_filename: "prod_db_{timestamp}.dump.zst"

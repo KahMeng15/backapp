@@ -31,10 +31,9 @@ services:
       # Centralized target storage for all compressed archives (.tar.zst, .dump.zst, .sql.zst)
       - ./backups:/mnt/backups
 
-      # Multi-server source directories mounted read-only for zero-impact streaming
-      # Point these to wherever your external servers store their data:
+      # Server world/data directories mounted read-only for zero-impact streaming
+      # (e.g. NFS share, CIFS/SMB mount, or local path from another container engine)
       - ./data/servers/mc_survival:/data/servers/mc_survival:ro
-      - ./data/servers/mc_creative:/data/servers/mc_creative:ro
 
       # IPC socket volume for interactive TUI and CLI connections
       - backapp_socket:/var/run/backapp
