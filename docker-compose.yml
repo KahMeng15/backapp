@@ -18,7 +18,7 @@ services:
 
     volumes:
       # Job configuration files for all servers
-      - ./examples:/etc/backup/jobs:ro
+      - ./jobs:/etc/backup/jobs:ro
 
       # Centralized target storage for all compressed archives (.tar.zst, .dump.zst, .sql.zst)
       - ./backups:/mnt/backups

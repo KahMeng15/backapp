@@ -104,7 +104,7 @@ services:
 
     volumes:
       # Job configuration files
-      - ./examples:/etc/backup/jobs:ro
+      - ./jobs:/etc/backup/jobs:ro
 
       # Centralized target storage for compressed archives (.tar.zst, etc.)
       - ./backups:/mnt/backups
