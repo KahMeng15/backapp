@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, List, Optional
@@ -325,3 +326,43 @@ def load_jobs_from_directory(directory: Path) -> dict[str, JobConfig]:
                 raise ConfigError(f"Error loading {file_path.name}: {e}") from e
 
     return jobs
+
+
+def get_template_files() -> list[Path]:
+    """Retrieve bundled template YAML configurations."""
+    # 1. In Docker image at /app/examples
+    docker_examples = Path("/app/examples")
+    if docker_examples.is_dir():
+        files = sorted(docker_examples.glob("*.yaml"))
+        if files:
+            return files
+
+    # 2. In repository root examples/
+    repo_examples = Path(__file__).resolve().parent.parent.parent / "examples"
+    if repo_examples.is_dir():
+        files = sorted(repo_examples.glob("*.yaml"))
+        if files:
+            return files
+
+    return []
+
+
+def seed_examples_if_empty(target_dir: Path) -> list[str]:
+    """Auto-seed bundled example configs into target_dir if it exists/can be created and is empty."""
+    created: list[str] = []
+    try:
+        target_dir.mkdir(parents=True, exist_ok=True)
+        existing = [
+            f for f in target_dir.iterdir()
+            if f.suffix.lower() in (".yaml", ".yml") and not f.name.startswith(".")
+        ]
+        if not existing:
+            templates = get_template_files()
+            for tmpl in templates:
+                dest = target_dir / tmpl.name
+                shutil.copy2(tmpl, dest)
+                created.append(tmpl.name)
+    except (OSError, PermissionError):
+        # Ignore if target_dir is mounted read-only or uncreatable
+        pass
+    return created

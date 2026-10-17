@@ -72,15 +72,16 @@ WORKDIR /app
 # Copy dependency specifications first to leverage Docker cache
 COPY pyproject.toml requirements.txt README.md /app/
 COPY src/ /app/src/
+COPY examples/ /app/examples/
 
 # Install Python package
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir .
 
 # Create default directories
-RUN mkdir -p /etc/backup/jobs /mnt/backups /var/run/backapp
+RUN mkdir -p /etc/backup/jobs /etc/backup/examples /mnt/backups /var/run/backapp
 
-VOLUME ["/etc/backup/jobs", "/mnt/backups", "/var/run/backapp"]
+VOLUME ["/etc/backup/jobs", "/etc/backup/examples", "/mnt/backups", "/var/run/backapp"]
 
 # Default entrypoint runs the background scheduler daemon
 ENTRYPOINT ["backapp"]

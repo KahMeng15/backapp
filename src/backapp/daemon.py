@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 from croniter import croniter
 
-from backapp.config import ConfigError, JobConfig, load_jobs_from_directory
+from backapp.config import ConfigError, JobConfig, load_jobs_from_directory, seed_examples_if_empty
 from backapp.engine import BackupEngine, BackupResult, format_bytes, get_restore_command
 from backapp.ipc import IPCServer, resolve_socket_path
 from backapp.retention import apply_retention, list_job_backups
@@ -57,9 +57,23 @@ class BackupDaemon:
             logger.error("Failed to load jobs from %s: %s", self.jobs_dir, e)
             return len(self.jobs)
 
+        # Auto-seed template configs if /etc/backup/examples or BACKUP_EXAMPLES_DIR is empty
+        examples_dir = Path(os.environ.get("BACKUP_EXAMPLES_DIR", "/etc/backup/examples"))
+        seeded = seed_examples_if_empty(examples_dir)
+        if seeded:
+            logger.info("Auto-seeded %d template config(s) into %s: %s", len(seeded), examples_dir, ", ".join(seeded))
+
         now = datetime.datetime.now()
         self.jobs = new_jobs
         self.next_runs.clear()
+
+        if not self.jobs:
+            logger.warning(
+                "No backup jobs found in %s! "
+                "Copy starter templates from %s or run 'backapp init' to define backup jobs.",
+                self.jobs_dir,
+                examples_dir,
+            )
 
         for name, job in self.jobs.items():
             self.state.register_job(

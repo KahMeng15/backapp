@@ -14,7 +14,7 @@ from rich.console import Console
 from rich.table import Table
 
 from backapp import __version__
-from backapp.config import ConfigError, load_job_file, load_jobs_from_directory
+from backapp.config import ConfigError, get_template_files, load_job_file, load_jobs_from_directory
 from backapp.daemon import BackupDaemon
 from backapp.engine import BackupEngine, format_bytes, get_restore_command
 from backapp.ipc import IPCClient, resolve_socket_path
@@ -254,6 +254,31 @@ def cmd_validate(args: argparse.Namespace) -> int:
         return 1
 
 
+def cmd_init(args: argparse.Namespace) -> int:
+    """Initialize template YAML configurations into target directory."""
+    import shutil
+    dest = Path(args.dest)
+    dest.mkdir(parents=True, exist_ok=True)
+    templates = get_template_files()
+    if not templates:
+        console.print("[bold red]No template configurations found packaged with backapp.[/bold red]")
+        return 1
+
+    console.print(f"[bold]Initializing templates into [green]{dest.resolve()}[/green]...[/bold]")
+    created = 0
+    for tmpl in templates:
+        target_file = dest / tmpl.name
+        if target_file.exists() and not args.force:
+            console.print(f"  [yellow]Skipped[/yellow] {tmpl.name} (already exists)")
+        else:
+            shutil.copy2(tmpl, target_file)
+            console.print(f"  [green]✔ Created[/green] {target_file.name}")
+            created += 1
+
+    console.print(f"[bold green]Successfully initialized {created} template(s) in {dest}![/bold green]")
+    return 0
+
+
 def main() -> None:
     default_jobs_dir = os.environ.get("BACKUP_JOBS_DIR", "/etc/backup/jobs")
 
@@ -308,6 +333,11 @@ def main() -> None:
     # validate
     subparsers.add_parser("validate", parents=[common_parser], help="Validate YAML config files in jobs directory")
 
+    # init
+    p_init = subparsers.add_parser("init", parents=[common_parser], help="Initialize starter template configuration files into a directory")
+    p_init.add_argument("dest", nargs="?", default=".", help="Target directory to initialize templates into (default: current directory)")
+    p_init.add_argument("--force", "-f", action="store_true", help="Overwrite existing files in target directory")
+
     args = parser.parse_args()
 
     if not args.subcommand or args.subcommand == "tui":
@@ -322,6 +352,8 @@ def main() -> None:
         sys.exit(cmd_backups(args))
     elif args.subcommand == "validate":
         sys.exit(cmd_validate(args))
+    elif args.subcommand == "init":
+        sys.exit(cmd_init(args))
     else:
         parser.print_help()
         sys.exit(1)

@@ -105,6 +105,8 @@ services:
     volumes:
       # Job configuration files
       - ./jobs:/etc/backup/jobs:ro
+      # Reference template examples (auto-seeds on startup)
+      - ./examples:/etc/backup/examples
 
       # Centralized target storage for compressed archives (.tar.zst, etc.)
       - ./backups:/mnt/backups

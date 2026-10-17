@@ -19,8 +19,8 @@ services:
     volumes:
       # Job configuration files for all servers
       - ./jobs:/etc/backup/jobs:ro
-      # Reference template examples
-      - ./examples:/etc/backup/examples:ro
+      # Reference template examples (writable so container auto-seeds templates if empty)
+      - ./examples:/etc/backup/examples
 
       # Centralized target storage for all compressed archives (.tar.zst, .dump.zst, .sql.zst)
       - ./backups:/mnt/backups

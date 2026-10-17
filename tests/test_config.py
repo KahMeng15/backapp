@@ -196,3 +196,28 @@ def test_load_mc_survival_example():
     assert job.hooks.rcon.port == 25575
     assert job.hooks.pre == ["save-off", "save-all flush"]
     assert job.hooks.post == ["save-on"]
+
+
+def test_get_template_files():
+    from backapp.config import get_template_files
+    templates = get_template_files()
+    assert len(templates) >= 3
+    names = [t.name for t in templates]
+    assert "mc_survival.yaml" in names
+    assert "mysql_main.yaml" in names
+    assert "pg_main.yaml" in names
+
+
+def test_seed_examples_if_empty(tmp_path):
+    from backapp.config import seed_examples_if_empty
+    target = tmp_path / "test_examples"
+    seeded = seed_examples_if_empty(target)
+    assert len(seeded) >= 3
+    assert (target / "mc_survival.yaml").exists()
+    assert (target / "mysql_main.yaml").exists()
+    assert (target / "pg_main.yaml").exists()
+
+    # Second call should not re-seed since directory is not empty
+    seeded_again = seed_examples_if_empty(target)
+    assert seeded_again == []
+
