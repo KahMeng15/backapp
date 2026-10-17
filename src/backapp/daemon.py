@@ -115,8 +115,16 @@ class BackupDaemon:
                 "data": summary,
             }
 
-        elif action == "trigger":
+        elif action in ("trigger", "trigger_all"):
             job_name = req.get("job_name")
+            if action == "trigger_all" or job_name in ("all", "*", None):
+                triggered = []
+                for name in list(self.jobs.keys()):
+                    if name not in self._running_jobs:
+                        asyncio.create_task(self.run_job_async(name, manual=True))
+                        triggered.append(name)
+                return {"status": "ok", "message": f"Triggered {len(triggered)} backup job(s): {', '.join(triggered)}"}
+
             if not job_name or job_name not in self.jobs:
                 return {"status": "error", "message": f"Job '{job_name}' not found."}
             

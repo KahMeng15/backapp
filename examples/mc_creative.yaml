@@ -1,0 +1,33 @@
+# /etc/backup/jobs/mc_creative.yaml
+name: "mc_creative"
+
+# Schedule: Run every 6 hours
+schedule: "0 */6 * * *"
+format: "tar.zst"
+
+source_dir: "/data/servers/mc_creative"
+output_dir: "/mnt/backups/mc_creative"
+
+retention:
+  keep_last: 8
+  gfs:
+    keep_daily: 7
+    keep_weekly: 4
+    keep_monthly: 6
+
+notifications:
+  discord_webhook: "$DISCORD_WEBHOOK_URL"
+  on_start: true
+  on_success: true
+  on_failure: true
+
+hooks:
+  pre:
+    - 'rcon-cli -H mc_creative -P 25575 -p "$RCON_PASS" "save-off"'
+    - 'rcon-cli -H mc_creative -P 25575 -p "$RCON_PASS" "save-all flush"'
+  post:
+    - 'rcon-cli -H mc_creative -P 25575 -p "$RCON_PASS" "save-on"'
+
+exclude:
+  - "*.lock"
+  - "cache/*"

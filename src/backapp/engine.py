@@ -122,7 +122,7 @@ class BackupEngine:
         now = datetime.datetime.now()
         timestamp_str = now.strftime("%Y-%m-%d_%H-%M-%S")
         
-        job.output_dir.mkdir(parents=True, exist_ok=True)
+        job.output_dir.mkdir(parents=True, exist_ok=True) if not self.dry_run else None
         dest_filename = job.resolve_filename(timestamp_str)
         dest_path = job.output_dir / dest_filename
         tmp_path = dest_path.with_name(f"{dest_filename}.tmp")
@@ -137,6 +137,8 @@ class BackupEngine:
         success = False
 
         try:
+            if not self.dry_run:
+                job.output_dir.mkdir(parents=True, exist_ok=True)
             # Step 1: Pre-hooks (e.g. Minecraft save-off, save-all flush)
             if job.hooks.pre:
                 logger.info("Executing pre-hooks for '%s'...", job.name)
@@ -144,23 +146,21 @@ class BackupEngine:
 
             # Step 2: Stream backup data directly to tmp_path
             if self.dry_run:
-                logger.info("[DRY RUN] Would create backup at %s", tmp_path)
-                tmp_path.write_text("dry run mock content")
+                logger.info("[DRY RUN] Simulated backup stream to %s", tmp_path)
+                success = True
             else:
                 self._stream_backup(job, tmp_path)
-
-            # Step 3: Atomic swap
-            if tmp_path.exists():
-                tmp_path.replace(dest_path)
-                success = True
-                logger.info(
-                    "Backup job '%s' successfully created: %s (%s)",
-                    job.name,
-                    dest_path.name,
-                    format_bytes(dest_path.stat().st_size),
-                )
-            else:
-                raise BackupExecutionError(f"Backup output file {tmp_path} was not created.")
+                if tmp_path.exists():
+                    tmp_path.replace(dest_path)
+                    success = True
+                    logger.info(
+                        "Backup job '%s' successfully created: %s (%s)",
+                        job.name,
+                        dest_path.name,
+                        format_bytes(dest_path.stat().st_size),
+                    )
+                else:
+                    raise BackupExecutionError(f"Backup output file {tmp_path} was not created.")
 
         except Exception as e:
             error_msg = str(e)

@@ -32,7 +32,7 @@ schedule: "0 */4 * * *"
 format: "tar.zst"
 
 # Source world directory and backup destination
-source_dir: "/data/minecraft_world"
+source_dir: "/data/servers/mc_survival"
 output_dir: "/mnt/backups/minecraft"
 
 # ==============================================================================

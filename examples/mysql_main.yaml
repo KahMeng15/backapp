@@ -9,7 +9,7 @@ name: "mysql_main"
 schedule: "0 3 * * *"
 
 type: "mysql" # or mariadb
-host: "mysql_srv"
+host: "mysql_db"
 port: 3306
 user: "root"
 password_env: "MYSQL_ROOT_PASSWORD"

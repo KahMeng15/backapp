@@ -30,5 +30,5 @@ notifications:
   on_success: true
   on_failure: true
 
-command: "pg_dump -h pg_srv -U postgres -d prod_db -Fc"
+command: "pg_dump -h postgres_db -U postgres -d prod_db -Fc"
 output_filename: "prod_db_{timestamp}.dump.zst"

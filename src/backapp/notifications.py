@@ -45,7 +45,10 @@ class WebhookConfig:
     def resolve_url(self) -> Optional[str]:
         if not self.url:
             return None
-        return os.path.expandvars(self.url.strip())
+        val = os.path.expandvars(self.url.strip())
+        if not val or val.startswith("$"):
+            return None
+        return val
 
 
 def _post_json(url: str, payload: Dict[str, Any], timeout: float = 8.0) -> bool:

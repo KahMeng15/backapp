@@ -68,16 +68,25 @@ def cmd_tui(args: argparse.Namespace) -> int:
 
 
 def cmd_run(args: argparse.Namespace) -> int:
-    """Run a specific backup job immediately."""
+    """Run a specific backup job or all jobs immediately."""
     setup_logging(args.log_level)
     jobs_dir = Path(args.jobs_dir)
     socket_path = Path(args.socket_path) if args.socket_path else resolve_socket_path()
     ipc = IPCClient(socket_path)
 
+    run_all = args.all or (args.job and args.job.lower() in ("all", "*"))
+    target_job = None if run_all else args.job
+
+    if not run_all and not target_job:
+        console.print("[bold red]Error: Please specify a job name to run, or pass --all to run all jobs.[/bold red]")
+        console.print("Usage: backapp run <job_name>  OR  backapp run --all")
+        return 1
+
     # If daemon is running, ask daemon to trigger
     if not args.direct and ipc.is_daemon_running():
-        console.print(f"[cyan]Daemon detected on socket {socket_path}. Sending trigger request...[/cyan]")
-        resp = ipc.send_request({"action": "trigger", "job_name": args.job})
+        console.print(f"[cyan]Daemon active on socket {socket_path}. Sending trigger request...[/cyan]")
+        req_payload = {"action": "trigger_all"} if run_all else {"action": "trigger", "job_name": target_job}
+        resp = ipc.send_request(req_payload)
         if resp.get("status") == "ok":
             console.print(f"[bold green]✔ {resp.get('message')}[/bold green]")
             return 0
@@ -86,30 +95,42 @@ def cmd_run(args: argparse.Namespace) -> int:
             return 1
 
     # Otherwise execute directly in standalone mode
-    console.print(f"[yellow]Running job '{args.job}' in direct mode...[/yellow]")
     jobs = load_jobs_from_directory(jobs_dir)
-    if args.job not in jobs:
-        console.print(f"[bold red]Error: Job '{args.job}' not found in {jobs_dir}[/bold red]")
+    if not jobs:
+        console.print(f"[bold red]No job configurations found in {jobs_dir}[/bold red]")
         return 1
 
-    job = jobs[args.job]
-    engine = BackupEngine(dry_run=args.dry_run)
-    result = engine.execute_job(job)
-
-    if result.success:
-        console.print(f"[bold green]✔ Backup successfully created:[/bold green] {result.output_file}")
-        console.print(f"  Size: {format_bytes(result.file_size_bytes)} | Duration: {result.duration_seconds:.2f}s")
-        # Apply retention
-        if not args.dry_run:
-            pruned = apply_retention(job)
-            if pruned:
-                console.print(f"  [yellow]Retention pruned {len(pruned)} older archive(s)[/yellow]")
-        return 0
+    if run_all:
+        jobs_to_run = list(jobs.values())
+        console.print(f"[yellow]Running all {len(jobs_to_run)} backup jobs in direct mode...[/yellow]")
     else:
-        console.print(f"[bold red]✖ Backup failed: {result.error_message}[/bold red]")
-        if result.post_hook_errors:
-            console.print(f"  [red]Post-hook errors: {result.post_hook_errors}[/red]")
-        return 1
+        if target_job not in jobs:
+            console.print(f"[bold red]Error: Job '{target_job}' not found in {jobs_dir}[/bold red]")
+            return 1
+        jobs_to_run = [jobs[target_job]]
+        console.print(f"[yellow]Running job '{target_job}' in direct mode...[/yellow]")
+
+    engine = BackupEngine(dry_run=args.dry_run)
+    all_success = True
+
+    for job in jobs_to_run:
+        console.print(f"\n[cyan]▶ Executing backup for '{job.name}' ({job.type})...[/cyan]")
+        result = engine.execute_job(job)
+
+        if result.success:
+            console.print(f"[bold green]✔ Backup successfully created:[/bold green] {result.output_file}")
+            console.print(f"  Size: {format_bytes(result.file_size_bytes)} | Duration: {result.duration_seconds:.2f}s")
+            if not args.dry_run:
+                pruned = apply_retention(job)
+                if pruned:
+                    console.print(f"  [yellow]Retention pruned {len(pruned)} older archive(s)[/yellow]")
+        else:
+            all_success = False
+            console.print(f"[bold red]✖ Backup failed for '{job.name}': {result.error_message}[/bold red]")
+            if result.post_hook_errors:
+                console.print(f"  [red]Post-hook errors: {result.post_hook_errors}[/red]")
+
+    return 0 if all_success else 1
 
 
 def cmd_list(args: argparse.Namespace) -> int:
@@ -271,8 +292,9 @@ def main() -> None:
     subparsers.add_parser("tui", parents=[common_parser], help="Launch interactive Terminal User Interface (TUI)")
 
     # run
-    p_run = subparsers.add_parser("run", parents=[common_parser], help="Trigger a specific backup job immediately")
-    p_run.add_argument("job", help="Name of the job to run")
+    p_run = subparsers.add_parser("run", parents=[common_parser], help="Trigger a specific backup job or all jobs immediately")
+    p_run.add_argument("job", nargs="?", default=None, help="Name of the job to run (or 'all' / omit when using --all)")
+    p_run.add_argument("--all", action="store_true", help="Trigger all configured backup jobs immediately")
     p_run.add_argument("--direct", action="store_true", help="Bypass daemon and execute directly in current process")
     p_run.add_argument("--dry-run", action="store_true", help="Simulate backup execution")
 
