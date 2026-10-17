@@ -214,6 +214,15 @@ class BackupEngine:
             if not job.source_dir or not job.source_dir.exists():
                 raise BackupExecutionError(f"Source directory '{job.source_dir}' does not exist.")
 
+            try:
+                if not any(job.source_dir.iterdir()):
+                    raise BackupExecutionError(
+                        f"Source directory '{job.source_dir}' is empty! "
+                        f"Make sure your server files are mounted into the container in docker-compose.yml."
+                    )
+            except PermissionError as e:
+                raise BackupExecutionError(f"Permission denied reading source directory '{job.source_dir}': {e}")
+
             if fmt == "zip":
                 self._stream_zip(job, tmp_path, priority)
             elif fmt in ("tar.zst", "tar.gz"):
@@ -294,7 +303,10 @@ class BackupEngine:
             text=True,
         )
         if proc.returncode != 0:
-            raise BackupExecutionError(f"zip command failed with code {proc.returncode}: {proc.stderr.strip()}")
+            err = proc.stderr.strip() or proc.stdout.strip()
+            if proc.returncode == 12:
+                err = err or "Nothing to do (source directory has no matching files or all files were excluded)"
+            raise BackupExecutionError(f"zip command failed with code {proc.returncode}: {err}")
 
     def _stream_database_or_command(
         self, job: JobConfig, tmp_path: Path, fmt: str, priority: List[str]

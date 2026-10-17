@@ -170,3 +170,21 @@ def test_command_streaming_backup(tmp_path: Path):
     )
     assert gunzip_res.returncode == 0
     assert "CREATE TABLE test" in gunzip_res.stdout
+
+
+def test_empty_source_dir_error(tmp_path: Path):
+    empty_src = tmp_path / "empty_server"
+    empty_src.mkdir()
+    out_dir = tmp_path / "backups_empty"
+
+    job = JobConfig(
+        name="test_empty",
+        format="zip",
+        source_dir=empty_src,
+        output_dir=out_dir,
+    )
+    engine = BackupEngine()
+    result = engine.execute_job(job)
+    assert result.success is False
+    assert "empty" in result.error_message.lower()
+
