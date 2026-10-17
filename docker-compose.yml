@@ -1,6 +1,6 @@
 services:
   backapp:
-    image: ghcr.io/kahmeng15/backmc:latest
+    image: ghcr.io/kahmeng15/backapp:latest
     container_name: backapp
     restart: unless-stopped
     cap_add:

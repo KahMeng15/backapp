@@ -27,7 +27,7 @@ Designed specifically for production servers, game servers, and database cluster
 ### 3. Pre-built GHCR Container Image
 - Ready to pull from GitHub Container Registry:
   ```bash
-  docker pull ghcr.io/kahmeng15/backmc:latest
+  docker pull ghcr.io/kahmeng15/backapp:latest
   ```
 - Automated multi-arch build (`linux/amd64`, `linux/arm64`) with GitHub Actions workflow in `.github/workflows/docker-publish.yml`.
 
@@ -90,7 +90,7 @@ version: "3.8"
 
 services:
   backapp:
-    image: ghcr.io/kahmeng15/backmc:latest
+    image: ghcr.io/kahmeng15/backapp:latest
     container_name: backapp
     restart: unless-stopped
     cap_add:
