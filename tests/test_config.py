@@ -161,3 +161,38 @@ retention:
     assert "job1" in jobs
     assert "job2" in jobs
     assert jobs["job2"].retention.keep_last == 3
+
+
+def test_rcon_hooks_config():
+    data = {
+        "name": "mc_rcon_test",
+        "source_dir": "/data/mc",
+        "hooks": {
+            "rcon": {
+                "host": "10.0.0.50",
+                "port": 25575,
+                "password": "mypassword",
+            },
+            "pre": ["save-off", "save-all flush"],
+            "post": ["save-on"],
+        },
+    }
+    job = parse_job_dict(data)
+    assert job.hooks.rcon is not None
+    assert job.hooks.rcon.host == "10.0.0.50"
+    assert job.hooks.rcon.port == 25575
+    assert job.hooks.rcon.password == "mypassword"
+    assert job.hooks.pre == ["save-off", "save-all flush"]
+    assert job.hooks.post == ["save-on"]
+
+
+def test_load_mc_survival_example():
+    from backapp.config import load_job_file
+    example_path = Path(__file__).parent.parent / "examples" / "mc_survival.yaml"
+    job = load_job_file(example_path)
+    assert job.name == "mc_survival"
+    assert job.hooks.rcon is not None
+    assert job.hooks.rcon.host == "192.168.1.100"
+    assert job.hooks.rcon.port == 25575
+    assert job.hooks.pre == ["save-off", "save-all flush"]
+    assert job.hooks.post == ["save-on"]

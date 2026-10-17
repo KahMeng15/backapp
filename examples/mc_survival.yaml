@@ -62,14 +62,21 @@ notifications:
   on_success: true  # Notify with green embed when backup succeeds
   on_failure: true  # Notify with red alert embed if backup fails
 
-# Pre/Post hooks (guaranteed finally execution for save-on)
-# Can target ANY remote IP address (e.g. 192.168.1.100), domain, or host.docker.internal:
+# ==============================================================================
+# PRE / POST HOOKS (RCON & Zero-Impact World Flush)
+# ==============================================================================
+# Define common RCON connection settings once, and simply list Minecraft commands.
+# Guaranteed to execute post hooks in a finally block (e.g. save-on).
 hooks:
+  rcon:
+    host: 192.168.1.100       # Target ANY remote IP, domain, or host.docker.internal
+    port: 25575
+    password: "$RCON_PASS"    # Reads from environment variable or enter password directly
   pre:
-    - 'rcon-cli -H 192.168.1.100 -P 25575 -p "$RCON_PASS" "save-off"'
-    - 'rcon-cli -H 192.168.1.100 -P 25575 -p "$RCON_PASS" "save-all flush"'
+    - "save-off"
+    - "save-all flush"
   post:
-    - 'rcon-cli -H 192.168.1.100 -P 25575 -p "$RCON_PASS" "save-on"'
+    - "save-on"
 
 exclude:
   - "*.lock"

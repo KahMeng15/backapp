@@ -142,7 +142,7 @@ class BackupEngine:
             # Step 1: Pre-hooks (e.g. Minecraft save-off, save-all flush)
             if job.hooks.pre:
                 logger.info("Executing pre-hooks for '%s'...", job.name)
-                run_pre_hooks(job.hooks.pre)
+                run_pre_hooks(job.hooks.pre, rcon=job.hooks.rcon)
 
             # Step 2: Stream backup data directly to tmp_path
             if self.dry_run:
@@ -174,7 +174,7 @@ class BackupEngine:
             # Step 4: Post-hooks inside GUARANTEED finally block (e.g. save-on)
             if job.hooks.post:
                 logger.info("Executing post-hooks for '%s' (guaranteed finally)...", job.name)
-                errs = run_post_hooks(job.hooks.post)
+                errs = run_post_hooks(job.hooks.post, rcon=job.hooks.rcon)
                 if errs:
                     post_hook_errors = [str(err) for err in errs]
 

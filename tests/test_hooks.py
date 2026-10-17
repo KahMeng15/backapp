@@ -31,3 +31,32 @@ def test_post_hooks_guaranteed_finally():
     assert len(errs) == 1
     assert os.path.exists(marker_file)
     os.unlink(marker_file)
+
+
+def test_rcon_command_resolution():
+    from backapp.config import RconConfig
+    from backapp.hooks import resolve_hook_command
+
+    rcon = RconConfig(host="192.168.1.100", port=25575, password="$RCON_PASS")
+
+    # Bare minecraft commands
+    cmd1 = resolve_hook_command("save-off", rcon=rcon)
+    assert cmd1 == 'rcon-cli -H 192.168.1.100 -P 25575 -p "$RCON_PASS" "save-off"'
+
+    cmd2 = resolve_hook_command("save-all flush", rcon=rcon)
+    assert cmd2 == 'rcon-cli -H 192.168.1.100 -P 25575 -p "$RCON_PASS" "save-all flush"'
+
+    # Prefix rcon: or rcon
+    cmd3 = resolve_hook_command("rcon: save-on", rcon=rcon)
+    assert cmd3 == 'rcon-cli -H 192.168.1.100 -P 25575 -p "$RCON_PASS" "save-on"'
+
+    cmd4 = resolve_hook_command("rcon say Hello Server", rcon=rcon)
+    assert cmd4 == 'rcon-cli -H 192.168.1.100 -P 25575 -p "$RCON_PASS" "say Hello Server"'
+
+    # Explicit shell command escape
+    cmd5 = resolve_hook_command("shell: echo 'starting backup'", rcon=rcon)
+    assert cmd5 == "echo 'starting backup'"
+
+    # Scripts starting with ./ or / stay shell commands
+    cmd6 = resolve_hook_command("./scripts/prepare.sh", rcon=rcon)
+    assert cmd6 == "./scripts/prepare.sh"

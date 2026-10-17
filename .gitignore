@@ -9,3 +9,4 @@ backmc.egg-info/
 *.tmp
 .DS_Store
 *.egg-info/
+.env

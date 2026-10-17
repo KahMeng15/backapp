@@ -75,9 +75,18 @@ class RetentionConfig:
 
 
 @dataclass
+class RconConfig:
+    """RCON connection parameters for Minecraft and game servers."""
+    host: str = "127.0.0.1"
+    port: int = 25575
+    password: Optional[str] = None
+
+
+@dataclass
 class HooksConfig:
     pre: List[str] = field(default_factory=list)
     post: List[str] = field(default_factory=list)
+    rcon: Optional[RconConfig] = None
 
 
 @dataclass
@@ -215,7 +224,7 @@ def parse_job_dict(data: dict[str, Any], config_file: Optional[Path] = None) -> 
         keep_last = 10
     retention = RetentionConfig(keep_last=int(keep_last), gfs=gfs_config)
 
-    # Hooks
+    # Hooks & RCON configuration
     hooks_raw = data.get("hooks", {})
     pre_hooks = hooks_raw.get("pre", []) if isinstance(hooks_raw, dict) else []
     post_hooks = hooks_raw.get("post", []) if isinstance(hooks_raw, dict) else []
@@ -223,7 +232,17 @@ def parse_job_dict(data: dict[str, Any], config_file: Optional[Path] = None) -> 
         pre_hooks = [pre_hooks]
     if isinstance(post_hooks, str):
         post_hooks = [post_hooks]
-    hooks = HooksConfig(pre=list(pre_hooks), post=list(post_hooks))
+
+    rcon_raw = (hooks_raw.get("rcon") if isinstance(hooks_raw, dict) else None) or data.get("rcon")
+    rcon_config: Optional[RconConfig] = None
+    if isinstance(rcon_raw, dict):
+        rcon_config = RconConfig(
+            host=str(rcon_raw.get("host", "127.0.0.1")),
+            port=int(rcon_raw.get("port", 25575)),
+            password=str(rcon_raw.get("password", "")) if rcon_raw.get("password") is not None else None,
+        )
+
+    hooks = HooksConfig(pre=list(pre_hooks), post=list(post_hooks), rcon=rcon_config)
 
     # Notifications / Webhooks
     notif_raw = data.get("notifications") or data.get("webhook") or data.get("webhooks")

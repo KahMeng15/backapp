@@ -18,18 +18,17 @@ Designed specifically for production servers, game servers, and database cluster
   *(With automatic fallback to `nice -n 19` if `ionice` is unsupported or restricted).*
 - **Zero Python RAM Buffering**: Streams backup payloads **directly between kernel subprocess pipes** (e.g. `tar -cf - . | zstd -T0 -3 > output.tmp`). No archive chunks or database bytes are ever loaded into Python memory buffers.
 
-### 2. Multi-Server Centralized Architecture
-- Backs up multiple servers concurrently from a single lightweight container:
-  - **Server 1**: Minecraft Survival Server (`mc_survival`)
-  - **Server 2**: Minecraft Creative / Lobby Server (`mc_creative`)
-  - **Server 3**: PostgreSQL Production Database (`postgres_db`)
-  - **Server 4**: MySQL Database (`mysql_db`)
-- Reads server volumes read-only (`:ro`) and triggers remote RCON / dump hooks across the internal Docker network.
+### 2. Multi-Server & Remote Host Architecture
+- Backs up multiple servers concurrently from a single lightweight container across **separate hosts, different Docker engines, and remote IPs**:
+  - **Remote Minecraft Servers**: Zero-impact file streaming with RCON `save-off` / `save-on` hooks over TCP IP (e.g. `192.168.1.100`).
+  - **Remote PostgreSQL Databases**: Native `pg_dump` streaming directly to compressed zstd archive over TCP IP (e.g. `192.168.1.150`).
+  - **Remote MySQL / MariaDB Databases**: Native `mysqldump` streaming directly to compressed zstd archive over TCP IP (e.g. `192.168.1.160`).
+- Centralized target storage for all compressed archives (`/mnt/backups`).
 
 ### 3. Pre-built GHCR Container Image
 - Ready to pull from GitHub Container Registry:
   ```bash
-  docker pull ghcr.io/<owner>/backapp:latest
+  docker pull ghcr.io/kahmeng/backapp:latest
   ```
 - Automated multi-arch build (`linux/amd64`, `linux/arm64`) with GitHub Actions workflow in `.github/workflows/docker-publish.yml`.
 
@@ -85,22 +84,43 @@ Designed specifically for production servers, game servers, and database cluster
 
 ## 🚀 Quick Start with Docker Compose
 
-### 1. Configure and Start Multi-Server Environment
+### 1. Minimal `docker-compose.yml`
 
-In `docker-compose.yml`, specify your GHCR image or build locally:
 ```yaml
+version: "3.8"
+
 services:
   backapp:
-    image: ghcr.io/<owner>/backapp:latest
-    # or build locally:
-    build: .
+    image: ghcr.io/kahmeng/backapp:latest
+    container_name: backapp
+    restart: unless-stopped
+    cap_add:
+      - SYS_ADMIN # Allows ionice -c 3 (idle I/O class) priority
+    environment:
+      - LOG_LEVEL=INFO
+      - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL:-}
+      - RCON_PASS=${RCON_PASS:-secret_rcon_pass}
+      - PGPASSWORD=${PGPASSWORD:-postgres_password}
+      - MYSQL_PWD=${MYSQL_PWD:-mysql_root_password}
+
+    volumes:
+      # Job configuration files
+      - ./examples:/etc/backup/jobs:ro
+
+      # Centralized target storage for compressed archives (.tar.zst, etc.)
+      - ./backups:/mnt/backups
+
+      # Server data directories mounted read-only for zero-impact streaming
+      - ./data/servers/mc_survival:/data/servers/mc_survival:ro
+      - ./data/servers/mc_creative:/data/servers/mc_creative:ro
 ```
 
-Start the stack:
+Configure your environment and start the container:
 ```bash
-# Set your Discord webhook (optional)
-export DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/YOUR_WEBHOOK_URL"
+# 1. Copy the environment template and customize credentials:
+cp .env.example .env
 
+# 2. Start backapp in detached mode:
 docker compose up -d
 ```
 
@@ -134,9 +154,10 @@ docker compose exec -it backapp backapp tui
 Place YAML configuration files inside `/etc/backup/jobs/`:
 
 ### 1. Server 1: Minecraft Survival (`mc_survival.yaml`)
+Define common RCON settings once, without repeating host/port/password:
 ```yaml
 name: "mc_survival"
-schedule: "0 */4 * * *" # Every 4 hours
+schedule: "0 */4 * * *" # Every 4 hours (or "every 4 hours")
 format: "tar.zst"
 source_dir: "/data/servers/mc_survival"
 output_dir: "/mnt/backups/minecraft"
@@ -153,17 +174,21 @@ notifications:
   discord_webhook: "$DISCORD_WEBHOOK_URL"
 
 hooks:
+  rcon:
+    host: 192.168.1.100       # Target ANY remote host IP or domain
+    port: 25575
+    password: "$RCON_PASS"
   pre:
-    - 'rcon-cli -H mc_survival -P 25575 -p "$RCON_PASS" "save-off"'
-    - 'rcon-cli -H mc_survival -P 25575 -p "$RCON_PASS" "save-all flush"'
+    - "save-off"
+    - "save-all flush"
   post:
-    - 'rcon-cli -H mc_survival -P 25575 -p "$RCON_PASS" "save-on"'
+    - "save-on"               # Guaranteed finally cleanup
 ```
 
 ### 2. Server 2: Minecraft Creative / Lobby (`mc_creative.yaml`)
 ```yaml
 name: "mc_creative"
-schedule: "0 */6 * * *"
+schedule: "every 6 hours"
 format: "tar.zst"
 source_dir: "/data/servers/mc_creative"
 output_dir: "/mnt/backups/mc_creative"
@@ -178,11 +203,15 @@ notifications:
   discord_webhook: "$DISCORD_WEBHOOK_URL"
 
 hooks:
+  rcon:
+    host: 192.168.1.101
+    port: 25575
+    password: "$RCON_PASS"
   pre:
-    - 'rcon-cli -H mc_creative -P 25575 -p "$RCON_PASS" "save-off"'
-    - 'rcon-cli -H mc_creative -P 25575 -p "$RCON_PASS" "save-all flush"'
+    - "save-off"
+    - "save-all flush"
   post:
-    - 'rcon-cli -H mc_creative -P 25575 -p "$RCON_PASS" "save-on"'
+    - "save-on"
 ```
 
 ### 3. Server 3: PostgreSQL Database (`pg_main.yaml`)
@@ -202,7 +231,7 @@ retention:
 notifications:
   discord_webhook: "$DISCORD_WEBHOOK_URL"
 
-command: "pg_dump -h postgres_db -U postgres -d prod_db -Fc"
+command: "pg_dump -h 192.168.1.150 -U postgres -d prod_db -Fc"
 output_filename: "prod_db_{timestamp}.dump.zst"
 ```
 
@@ -211,10 +240,10 @@ output_filename: "prod_db_{timestamp}.dump.zst"
 name: "mysql_main"
 schedule: "0 3 * * *"
 type: "mysql"
-host: "mysql_db"
+host: "192.168.1.160"
 port: 3306
 user: "root"
-password_env: "MYSQL_ROOT_PASSWORD"
+password_env: "MYSQL_PWD"
 database: "production_db"
 format: "sql.zst"
 output_dir: "/mnt/backups/mysql"

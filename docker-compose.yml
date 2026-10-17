@@ -28,16 +28,3 @@ services:
       # Multi-server data directories mounted read-only for zero-impact streaming
       - ./data/servers/mc_survival:/data/servers/mc_survival:ro
       - ./data/servers/mc_creative:/data/servers/mc_creative:ro
-
-      # IPC socket volume for interactive TUI and CLI connections
-      - backapp_socket:/var/run/backapp
-
-    networks:
-      - server_network
-
-networks:
-  server_network:
-    driver: bridge
-
-volumes:
-  backapp_socket:
