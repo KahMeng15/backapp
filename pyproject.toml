@@ -3,11 +3,11 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "backmc"
-version = "1.0.0"
-description = "Zero-impact, production-ready backup daemon and interactive TUI for Minecraft, PostgreSQL, and MySQL"
+name = "backapp"
+version = "1.1.0"
+description = "Zero-impact, production-ready backup daemon and interactive TUI with Discord webhooks and GFS retention"
 readme = "README.md"
-authors = [{ name = "backmc team" }]
+authors = [{ name = "backapp team" }]
 requires-python = ">=3.12"
 dependencies = [
     "pyyaml>=6.0",
@@ -17,7 +17,8 @@ dependencies = [
 ]
 
 [project.scripts]
-backmc = "backmc.cli:main"
+backapp = "backapp.cli:main"
+backmc = "backapp.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

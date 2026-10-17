@@ -1,4 +1,4 @@
-"""Configuration parser and schema validator for backmc backup jobs."""
+"""Configuration parser, GFS retention specs, and schema validator for backapp."""
 
 from __future__ import annotations
 
@@ -10,14 +10,68 @@ from typing import Any, List, Optional
 import yaml
 from croniter import croniter
 
+from backapp.notifications import WebhookConfig
+
 
 class ConfigError(Exception):
     """Raised when a job configuration file has errors."""
 
 
+# Friendly schedule aliases mapping to standard 5-part cron syntax
+CRON_ALIASES = {
+    "@hourly": "0 * * * *",
+    "@daily": "0 0 * * *",
+    "@midnight": "0 0 * * *",
+    "@weekly": "0 0 * * 0",
+    "@monthly": "0 0 1 * *",
+    "@yearly": "0 0 1 1 *",
+    "@annually": "0 0 1 1 *",
+}
+
+
+def normalize_schedule(schedule_raw: Optional[str]) -> Optional[str]:
+    """Convert cron aliases (e.g. @daily, @hourly) or interval phrases to standard cron syntax."""
+    if not schedule_raw:
+        return None
+    s = schedule_raw.strip()
+    if s.lower() in CRON_ALIASES:
+        return CRON_ALIASES[s.lower()]
+
+    # Match simple patterns like "every X hours" or "every X minutes"
+    m_hours = re.match(r"^every\s+(\d+)\s+hours?$", s, re.IGNORECASE)
+    if m_hours:
+        h = int(m_hours.group(1))
+        return f"0 */{h} * * *"
+
+    m_mins = re.match(r"^every\s+(\d+)\s+min(?:ute)?s?$", s, re.IGNORECASE)
+    if m_mins:
+        m = int(m_mins.group(1))
+        return f"*/{m} * * * *"
+
+    return s
+
+
+@dataclass
+class GFSConfig:
+    """Grandfather-Father-Son (GFS) retention rotation policy."""
+    keep_hourly: Optional[int] = None
+    keep_daily: Optional[int] = None    # Son (daily snapshots)
+    keep_weekly: Optional[int] = None   # Father (weekly snapshots)
+    keep_monthly: Optional[int] = None  # Grandfather (monthly snapshots)
+    keep_yearly: Optional[int] = None   # Great-grandfather (yearly snapshots)
+
+    @property
+    def is_enabled(self) -> bool:
+        return any(
+            v is not None and v > 0
+            for v in (self.keep_hourly, self.keep_daily, self.keep_weekly, self.keep_monthly, self.keep_yearly)
+        )
+
+
 @dataclass
 class RetentionConfig:
     keep_last: int = 10
+    gfs: Optional[GFSConfig] = None
 
 
 @dataclass
@@ -34,6 +88,7 @@ class JobConfig:
     output_dir: Path = Path("/mnt/backups")
     retention: RetentionConfig = field(default_factory=RetentionConfig)
     hooks: HooksConfig = field(default_factory=HooksConfig)
+    notifications: WebhookConfig = field(default_factory=WebhookConfig)
     
     # Archetype detection: 'filesystem' | 'minecraft' | 'postgres' | 'mysql' | 'command'
     type: str = "filesystem"
@@ -68,7 +123,7 @@ class JobConfig:
         if self.schedule is not None and self.schedule.strip() != "":
             if not croniter.is_valid(self.schedule):
                 raise ConfigError(
-                    f"Job '{self.name}' has invalid cron schedule '{self.schedule}'. Expected standard 5-part cron syntax."
+                    f"Job '{self.name}' has invalid cron schedule '{self.schedule}'. Expected standard 5-part cron syntax (e.g. '0 */4 * * *')."
                 )
 
         # Normalize format
@@ -112,11 +167,7 @@ class JobConfig:
             )
 
     def resolve_filename(self, timestamp_str: str) -> str:
-        """Resolve destination filename based on pattern or default naming convention.
-        
-        Default: <job_name>_<YYYY-MM-DD_HH-MM-SS>.<ext>
-        Custom: output_filename with {timestamp} or {job_name} placeholder
-        """
+        """Resolve destination filename based on pattern or default naming convention."""
         fmt = self.format.lower().lstrip(".")
         if self.output_filename:
             return self.output_filename.format(
@@ -139,19 +190,30 @@ def parse_job_dict(data: dict[str, Any], config_file: Optional[Path] = None) -> 
         else:
             raise ConfigError("Job configuration missing required field 'name'")
 
-    schedule = data.get("schedule")
+    schedule_raw = data.get("schedule")
+    schedule = normalize_schedule(schedule_raw)
     fmt = data.get("format", "tar.zst")
     output_dir = Path(os.path.expandvars(str(data.get("output_dir", "/mnt/backups"))))
 
-    # Retention
+    # Retention (supporting keep_last and GFS)
     ret_raw = data.get("retention", {})
+    gfs_config: Optional[GFSConfig] = None
     if isinstance(ret_raw, int):
         keep_last = ret_raw
     elif isinstance(ret_raw, dict):
         keep_last = ret_raw.get("keep_last", 10)
+        gfs_raw = ret_raw.get("gfs")
+        if isinstance(gfs_raw, dict):
+            gfs_config = GFSConfig(
+                keep_hourly=gfs_raw.get("keep_hourly"),
+                keep_daily=gfs_raw.get("keep_daily"),
+                keep_weekly=gfs_raw.get("keep_weekly"),
+                keep_monthly=gfs_raw.get("keep_monthly"),
+                keep_yearly=gfs_raw.get("keep_yearly"),
+            )
     else:
         keep_last = 10
-    retention = RetentionConfig(keep_last=int(keep_last))
+    retention = RetentionConfig(keep_last=int(keep_last), gfs=gfs_config)
 
     # Hooks
     hooks_raw = data.get("hooks", {})
@@ -162,6 +224,10 @@ def parse_job_dict(data: dict[str, Any], config_file: Optional[Path] = None) -> 
     if isinstance(post_hooks, str):
         post_hooks = [post_hooks]
     hooks = HooksConfig(pre=list(pre_hooks), post=list(post_hooks))
+
+    # Notifications / Webhooks
+    notif_raw = data.get("notifications") or data.get("webhook") or data.get("webhooks")
+    notifications = WebhookConfig.from_dict(notif_raw)
 
     # Determine archetype type
     job_type = data.get("type")
@@ -192,6 +258,7 @@ def parse_job_dict(data: dict[str, Any], config_file: Optional[Path] = None) -> 
         output_dir=output_dir,
         retention=retention,
         hooks=hooks,
+        notifications=notifications,
         type=job_type,
         source_dir=source_dir,
         exclude=list(exclude),
@@ -236,7 +303,6 @@ def load_jobs_from_directory(directory: Path) -> dict[str, JobConfig]:
                 job = load_job_file(file_path)
                 jobs[job.name] = job
             except Exception as e:
-                # Log or re-raise
                 raise ConfigError(f"Error loading {file_path.name}: {e}") from e
 
     return jobs

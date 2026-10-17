@@ -58,7 +58,7 @@ class RingBufferLogHandler(logging.Handler):
 
 
 class DaemonState:
-    """Thread-safe state manager for the backmc daemon."""
+    """Thread-safe state manager for the backapp daemon."""
 
     def __init__(self):
         self.start_time: float = time.time()

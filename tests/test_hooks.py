@@ -2,7 +2,7 @@
 
 import os
 import pytest
-from backmc.hooks import HookExecutionError, run_post_hooks, run_pre_hooks, run_single_hook
+from backapp.hooks import HookExecutionError, run_post_hooks, run_pre_hooks, run_single_hook
 
 
 def test_hook_env_expansion():

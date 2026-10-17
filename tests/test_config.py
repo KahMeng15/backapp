@@ -1,8 +1,16 @@
-"""Tests for backmc configuration loading and schema validation."""
+"""Tests for backapp configuration loading and schema validation."""
 
 import pytest
 from pathlib import Path
-from backmc.config import ConfigError, JobConfig, RetentionConfig, HooksConfig, load_jobs_from_directory, parse_job_dict
+from backapp.config import (
+    ConfigError,
+    JobConfig,
+    RetentionConfig,
+    GFSConfig,
+    HooksConfig,
+    load_jobs_from_directory,
+    parse_job_dict,
+)
 
 
 def test_valid_minecraft_job():
@@ -26,6 +34,52 @@ def test_valid_minecraft_job():
     assert job.hooks.pre == ["echo save-off"]
     assert job.hooks.post == ["echo save-on"]
     assert job.type in ("minecraft", "filesystem")
+
+
+def test_schedule_cron_aliases():
+    assert parse_job_dict({"name": "j1", "schedule": "@daily", "source_dir": "/tmp"}).schedule == "0 0 * * *"
+    assert parse_job_dict({"name": "j2", "schedule": "@hourly", "source_dir": "/tmp"}).schedule == "0 * * * *"
+    assert parse_job_dict({"name": "j3", "schedule": "every 4 hours", "source_dir": "/tmp"}).schedule == "0 */4 * * *"
+    assert parse_job_dict({"name": "j4", "schedule": "every 30 mins", "source_dir": "/tmp"}).schedule == "*/30 * * * *"
+
+
+def test_gfs_retention_config():
+    data = {
+        "name": "gfs_job",
+        "source_dir": "/tmp",
+        "retention": {
+            "keep_last": 3,
+            "gfs": {
+                "keep_daily": 7,
+                "keep_weekly": 4,
+                "keep_monthly": 12,
+                "keep_yearly": 1,
+            },
+        },
+    }
+    job = parse_job_dict(data)
+    assert job.retention.keep_last == 3
+    assert job.retention.gfs is not None
+    assert job.retention.gfs.is_enabled is True
+    assert job.retention.gfs.keep_daily == 7
+    assert job.retention.gfs.keep_weekly == 4
+    assert job.retention.gfs.keep_monthly == 12
+
+
+def test_notifications_config():
+    data = {
+        "name": "notif_job",
+        "source_dir": "/tmp",
+        "notifications": {
+            "discord_webhook": "https://discord.com/api/webhooks/123/abc",
+            "on_start": True,
+            "on_success": True,
+            "on_failure": True,
+        },
+    }
+    job = parse_job_dict(data)
+    assert job.notifications.url == "https://discord.com/api/webhooks/123/abc"
+    assert job.notifications.on_start is True
 
 
 def test_valid_postgres_job():

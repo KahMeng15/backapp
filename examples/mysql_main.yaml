@@ -1,6 +1,13 @@
 # /etc/backup/jobs/mysql_main.yaml
 name: "mysql_main"
+
+# ==============================================================================
+# SCHEDULE (Cron Syntax Guide):
+#   Minute Hour Day-of-Month Month Day-of-Week
+#   "0 3 * * *" = Daily at 03:00 AM (or use "@daily")
+# ==============================================================================
 schedule: "0 3 * * *"
+
 type: "mysql" # or mariadb
 host: "mysql_srv"
 port: 3306
@@ -9,8 +16,26 @@ password_env: "MYSQL_ROOT_PASSWORD"
 database: "production_db"
 format: "sql.zst" # or sql.gz
 output_dir: "/mnt/backups/mysql"
+
+# ==============================================================================
+# RETENTION POLICY (GFS - Grandfather-Father-Son)
+# ==============================================================================
 retention:
   keep_last: 14
+  gfs:
+    keep_daily: 7    # Son
+    keep_weekly: 4   # Father
+    keep_monthly: 12 # Grandfather
+
+# ==============================================================================
+# WEBHOOK NOTIFICATIONS
+# ==============================================================================
+notifications:
+  discord_webhook: "$DISCORD_WEBHOOK_URL"
+  on_start: true
+  on_success: true
+  on_failure: true
+
 extra_args:
   - "--single-transaction"
   - "--quick"

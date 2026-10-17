@@ -1,4 +1,4 @@
-"""Lightweight UNIX domain socket IPC server and client for backmc daemon communication."""
+"""Lightweight UNIX domain socket IPC server and client for backapp daemon communication."""
 
 from __future__ import annotations
 
@@ -9,11 +9,11 @@ import os
 from pathlib import Path
 from typing import Any, Callable, Coroutine, Dict, Optional
 
-logger = logging.getLogger("backmc.ipc")
+logger = logging.getLogger("backapp.ipc")
 
 DEFAULT_SOCKET_PATHS = [
-    Path("/var/run/backmc/backmc.sock"),
-    Path("/tmp/backmc.sock"),
+    Path("/var/run/backapp/backapp.sock"),
+    Path("/tmp/backapp.sock"),
 ]
 
 
@@ -21,18 +21,18 @@ def resolve_socket_path(custom_path: Optional[str] = None) -> Path:
     """Find or determine appropriate socket path based on environment or defaults."""
     if custom_path:
         return Path(custom_path)
-    env_path = os.environ.get("BACKMC_SOCKET_PATH")
+    env_path = os.environ.get("BACKAPP_SOCKET_PATH") or os.environ.get("BACKMC_SOCKET_PATH")
     if env_path:
         return Path(env_path)
 
-    # Prefer /var/run if writable or /var/run/backmc exists, otherwise /tmp
+    # Prefer /var/run/backapp if writable, otherwise /tmp
     for p in DEFAULT_SOCKET_PATHS:
         try:
             p.parent.mkdir(parents=True, exist_ok=True)
             return p
         except Exception:
             continue
-    return Path("/tmp/backmc.sock")
+    return Path("/tmp/backapp.sock")
 
 
 class IPCServer:
@@ -60,7 +60,6 @@ class IPCServer:
             self._handle_client,
             path=str(self.socket_path),
         )
-        # Set permissions so TUI run by same or local group can access
         try:
             os.chmod(self.socket_path, 0o660)
         except Exception:
@@ -114,7 +113,7 @@ class IPCServer:
 
 
 class IPCClient:
-    """Client for querying the backmc daemon via UNIX domain socket."""
+    """Client for querying the backapp daemon via UNIX domain socket."""
 
     def __init__(self, socket_path: Optional[Path] = None):
         self.socket_path = socket_path or resolve_socket_path()

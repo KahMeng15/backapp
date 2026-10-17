@@ -1,19 +1,21 @@
 version: "3.8"
 
 services:
-  backmc:
+  backapp:
     build:
       context: .
       dockerfile: Dockerfile
-    image: backmc:latest
-    container_name: backmc
+    image: backapp:latest
+    container_name: backapp
     restart: unless-stopped
     cap_add:
       - SYS_ADMIN # Optional: allows ionice -c 3 (idle I/O class) priority
     environment:
       - BACKUP_JOBS_DIR=/etc/backup/jobs
-      - BACKMC_SOCKET_PATH=/var/run/backmc/backmc.sock
+      - BACKAPP_SOCKET_PATH=/var/run/backapp/backapp.sock
       - LOG_LEVEL=INFO
+      # Discord / Slack webhook for automated notifications on backup start, success, and failure
+      - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL:-}
       # Database and Minecraft credentials used by job hooks / dump commands
       - RCON_PASS=${RCON_PASS:-secret_rcon_pass}
       - PGPASSWORD=${PGPASSWORD:-postgres}
@@ -26,9 +28,9 @@ services:
       # Minecraft world or local filesystem source directories
       - ./data/minecraft_world:/data/minecraft_world:ro
       # IPC socket volume for interactive TUI / CLI connections
-      - backmc_socket:/var/run/backmc
+      - backapp_socket:/var/run/backapp
     networks:
       - default
 
 volumes:
-  backmc_socket:
+  backapp_socket:

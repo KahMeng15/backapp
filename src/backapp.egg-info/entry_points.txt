@@ -1,0 +1,3 @@
+[console_scripts]
+backapp = backapp.cli:main
+backmc = backapp.cli:main

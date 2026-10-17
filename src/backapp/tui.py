@@ -1,4 +1,4 @@
-"""Interactive Terminal User Interface (TUI) for backmc using Textual."""
+"""Interactive Terminal User Interface (TUI) for backapp using Textual."""
 
 from __future__ import annotations
 
@@ -20,10 +20,10 @@ from textual.widgets import (
     Static,
 )
 
-from backmc.config import JobConfig, load_jobs_from_directory
-from backmc.engine import BackupEngine, format_bytes, get_restore_command
-from backmc.ipc import IPCClient, resolve_socket_path
-from backmc.retention import list_job_backups
+from backapp.config import JobConfig, load_jobs_from_directory
+from backapp.engine import BackupEngine, format_bytes, get_restore_command
+from backapp.ipc import IPCClient, resolve_socket_path
+from backapp.retention import list_job_backups
 
 
 class BackupsModal(ModalScreen[None]):
@@ -96,7 +96,7 @@ class LogsModal(ModalScreen[None]):
 
     def compose(self) -> ComposeResult:
         with Vertical(id="logs-dialog"):
-            yield Label("📜 backmc Operations & Backup Logs", id="logs-title")
+            yield Label("📜 backapp Operations & Backup Logs", id="logs-title")
             rich_log = RichLog(id="logs-view", highlight=True, markup=True)
             yield rich_log
             with Horizontal(id="logs-buttons"):
@@ -123,8 +123,8 @@ class LogsModal(ModalScreen[None]):
         self.dismiss()
 
 
-class BackmcApp(App[None]):
-    """Main Textual interactive application for backmc."""
+class BackappApp(App[None]):
+    """Main Textual interactive application for backapp."""
 
     CSS = """
     Screen {
@@ -184,7 +184,6 @@ class BackmcApp(App[None]):
         min-width: 14;
     }
 
-    /* Modals */
     BackupsModal, LogsModal {
         align: center middle;
     }
@@ -253,7 +252,7 @@ class BackmcApp(App[None]):
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
         with Vertical(id="header-container"):
-            yield Label("BACKMC - Zero-Impact Backup Engine & Daemon", id="app-title")
+            yield Label("BACKAPP - Zero-Impact Backup Engine & Daemon", id="app-title")
             yield Label("Connecting to daemon...", id="daemon-status")
 
         with Container(id="table-container"):
@@ -281,7 +280,7 @@ class BackmcApp(App[None]):
             "Last Run",
             "Duration",
             "Latest Backup",
-            "Keep",
+            "Retention",
         )
         self.refresh_data()
         self.set_interval(2.0, self.refresh_data)
@@ -307,7 +306,6 @@ class BackmcApp(App[None]):
                 self._update_table_from_state(self.cached_status.get("jobs", {}))
                 return
 
-        # Fallback to direct inspection mode if daemon is offline
         status_lbl.update(
             "[bold yellow]○ STANDALONE MODE[/bold yellow] (Daemon offline. Inspecting job configurations directly from disk)"
         )
@@ -321,6 +319,7 @@ class BackmcApp(App[None]):
         for name, job in self.local_jobs.items():
             backups = list_job_backups(job)
             latest = backups[0].name if backups else "None"
+            ret_display = "GFS" if (job.retention.gfs and job.retention.gfs.is_enabled) else f"Last {job.retention.keep_last}"
             table.add_row(
                 f"[bold cyan]{job.name}[/bold cyan]",
                 job.type,
@@ -330,7 +329,7 @@ class BackmcApp(App[None]):
                 "-",
                 "-",
                 latest,
-                str(job.retention.keep_last),
+                ret_display,
                 key=job.name,
             )
 
@@ -373,7 +372,6 @@ class BackmcApp(App[None]):
                 key=name,
             )
 
-        # Restore cursor position if valid
         if saved_row_idx is not None and saved_row_idx < table.row_count:
             table.cursor_coordinate = (saved_row_idx, 0)
 
@@ -398,7 +396,6 @@ class BackmcApp(App[None]):
             else:
                 self.notify(f"Failed: {resp.get('message')}", severity="error")
         else:
-            # Standalone execution
             if job_name in self.local_jobs:
                 self.notify(f"Running '{job_name}' directly...", severity="information")
                 engine = BackupEngine()
@@ -464,3 +461,7 @@ class BackmcApp(App[None]):
             self.action_reload_configs()
         elif btn_id == "btn-quit":
             self.exit()
+
+
+# Alias for backwards compatibility
+BackmcApp = BackappApp

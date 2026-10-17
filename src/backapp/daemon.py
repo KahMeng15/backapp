@@ -13,13 +13,13 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 from croniter import croniter
 
-from backmc.config import ConfigError, JobConfig, load_jobs_from_directory
-from backmc.engine import BackupEngine, BackupResult, format_bytes, get_restore_command
-from backmc.ipc import IPCServer, resolve_socket_path
-from backmc.retention import apply_retention, list_job_backups
-from backmc.state import DaemonState
+from backapp.config import ConfigError, JobConfig, load_jobs_from_directory
+from backapp.engine import BackupEngine, BackupResult, format_bytes, get_restore_command
+from backapp.ipc import IPCServer, resolve_socket_path
+from backapp.retention import apply_retention, list_job_backups
+from backapp.state import DaemonState
 
-logger = logging.getLogger("backmc.daemon")
+logger = logging.getLogger("backapp.daemon")
 
 
 class BackupDaemon:
@@ -95,7 +95,6 @@ class BackupDaemon:
 
         elif action == "status":
             import resource
-            # ru_maxrss is in bytes on macOS, kilobytes on Linux
             rss_kb = (
                 resource.getrusage(resource.RUSAGE_SELF).ru_maxrss // 1024
                 if sys.platform == "darwin"
@@ -174,7 +173,6 @@ class BackupDaemon:
 
         loop = asyncio.get_running_loop()
         try:
-            # Run blocking subprocess execution in worker thread
             result: BackupResult = await loop.run_in_executor(
                 None, self.engine.execute_job, job
             )
@@ -198,7 +196,6 @@ class BackupDaemon:
                 error_msg=result.error_message,
             )
 
-            # Advance next cron schedule if scheduled
             if job.schedule:
                 try:
                     itr = croniter(job.schedule, datetime.datetime.now())
@@ -227,10 +224,8 @@ class BackupDaemon:
             try:
                 loop.add_signal_handler(sig, lambda: asyncio.create_task(self.stop()))
             except NotImplementedError:
-                # Windows or unsupported environment
                 pass
         
-        # SIGHUP for config reload
         if hasattr(signal, "SIGHUP"):
             try:
                 loop.add_signal_handler(
@@ -240,7 +235,7 @@ class BackupDaemon:
             except NotImplementedError:
                 pass
 
-        logger.info("backmc daemon started successfully. Low resource mode active.")
+        logger.info("backapp daemon started successfully. Low resource mode active.")
 
         while self.running:
             now = datetime.datetime.now()
@@ -259,16 +254,13 @@ class BackupDaemon:
                 if name not in self._running_jobs and name in self.jobs:
                     asyncio.create_task(self.run_job_async(name, manual=False))
 
-            # Calculate sleep duration to minimize CPU usage (0% when idle)
             if earliest_next is not None:
                 seconds_to_sleep = max(0.5, (earliest_next - datetime.datetime.now()).total_seconds())
-                # Cap sleep check at 60s so time drift or external changes are caught
                 sleep_time = min(seconds_to_sleep, 60.0)
             else:
                 sleep_time = 30.0
 
             try:
-                # Sleep asynchronously, waking up immediately if wake_event is set
                 await asyncio.wait_for(self._wake_event.wait(), timeout=sleep_time)
                 self._wake_event.clear()
             except asyncio.TimeoutError:
@@ -276,14 +268,13 @@ class BackupDaemon:
 
     async def stop(self) -> None:
         """Gracefully shutdown daemon and IPC server."""
-        logger.info("Stopping backmc daemon...")
+        logger.info("Stopping backapp daemon...")
         self.running = False
         self._wake_event.set()
 
         if self.ipc_server:
             await self.ipc_server.stop()
 
-        # Wait for running jobs to finish (with 15s timeout)
         if self._running_jobs:
             logger.info("Waiting for running jobs to complete: %s", list(self._running_jobs))
             for _ in range(30):
@@ -291,4 +282,4 @@ class BackupDaemon:
                     break
                 await asyncio.sleep(0.5)
 
-        logger.info("backmc daemon stopped cleanly.")
+        logger.info("backapp daemon stopped cleanly.")

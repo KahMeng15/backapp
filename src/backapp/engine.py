@@ -11,12 +11,13 @@ import subprocess
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Optional
 
-from backmc.config import JobConfig
-from backmc.hooks import run_post_hooks, run_pre_hooks
+from backapp.config import JobConfig
+from backapp.hooks import run_post_hooks, run_pre_hooks
+from backapp.notifications import notify_backup_completed, notify_backup_started
 
-logger = logging.getLogger("backmc.engine")
+logger = logging.getLogger("backapp.engine")
 
 
 class BackupExecutionError(Exception):
@@ -127,6 +128,9 @@ class BackupEngine:
         tmp_path = dest_path.with_name(f"{dest_filename}.tmp")
 
         logger.info("Starting backup job '%s' -> %s", job.name, dest_path)
+
+        # Notify webhook that backup has started
+        notify_backup_started(job.name, job.type, dest_path, job.notifications)
         
         post_hook_errors: List[str] = []
         error_msg: Optional[str] = None
@@ -176,6 +180,18 @@ class BackupEngine:
 
         duration = time.monotonic() - start_time
         file_size = dest_path.stat().st_size if dest_path.exists() and success else 0
+
+        # Note: final webhook notification is dispatched either here or in daemon after retention
+        notify_backup_completed(
+            job_name=job.name,
+            job_type=job.type,
+            output_file=dest_path,
+            success=success,
+            duration_seconds=duration,
+            file_size_formatted=format_bytes(file_size),
+            webhook_cfg=job.notifications,
+            error_message=error_msg,
+        )
 
         return BackupResult(
             job_name=job.name,
@@ -246,15 +262,13 @@ class BackupEngine:
                 stdout=f_out,
                 stderr=subprocess.PIPE,
             )
-            # Allow p_tar to receive SIGPIPE if compressor terminates early
             if p_tar.stdout:
                 p_tar.stdout.close()
 
             _, comp_stderr = p_comp.communicate()
             _, tar_stderr = p_tar.communicate()
 
-        if p_tar.returncode != 0 and p_tar.returncode != 1:  # tar code 1 is file changed during read (common in active files)
-            # Check if fatal
+        if p_tar.returncode != 0 and p_tar.returncode != 1:
             err = tar_stderr.decode("utf-8", errors="replace").strip()
             if p_tar.returncode > 1 or "error" in err.lower():
                 raise BackupExecutionError(f"tar command failed with code {p_tar.returncode}: {err}")
@@ -286,7 +300,6 @@ class BackupEngine:
         self, job: JobConfig, tmp_path: Path, fmt: str, priority: List[str]
     ) -> None:
         """Execute database dump or custom command and stream stdout directly to compressor/disk."""
-        # Construct dump command
         cmd_env = os.environ.copy()
 
         if job.command:
@@ -304,7 +317,6 @@ class BackupEngine:
             if job.user:
                 dump_args.extend(["-U", job.user])
             
-            # Format flag for pg_dump: -Fc for custom format if dump.*, otherwise standard
             if "dump" in fmt:
                 dump_args.append("-Fc")
 
@@ -314,7 +326,6 @@ class BackupEngine:
             if job.database:
                 dump_args.extend(["-d", job.database])
 
-            # Password handling
             pw = job.password
             if not pw and job.password_env:
                 pw = os.environ.get(job.password_env, "")
@@ -326,8 +337,6 @@ class BackupEngine:
             if not shutil.which(dump_bin):
                 raise BackupExecutionError(f"{dump_bin} not found in PATH. Install default-mysql-client.")
             dump_args = [dump_bin]
-            
-            # Default production-safe flags for MySQL
             dump_args.extend(["--single-transaction", "--quick"])
             
             if job.host:
@@ -351,7 +360,6 @@ class BackupEngine:
         else:
             raise BackupExecutionError(f"Unsupported job type: {job.type}")
 
-        # Choose compressor based on format
         comp_cmd: Optional[List[str]] = None
         if fmt.endswith(".zst") or fmt == "zst":
             if not shutil.which("zstd"):
@@ -391,7 +399,6 @@ class BackupEngine:
                     err = comp_stderr.decode("utf-8", errors="replace").strip()
                     raise BackupExecutionError(f"Compression failed with code {p_comp.returncode}: {err}")
             else:
-                # Direct stream to file without compression
                 logger.debug("Streaming: %s > %s", " ".join(full_dump_cmd), tmp_path)
                 p_dump = subprocess.Popen(
                     full_dump_cmd,

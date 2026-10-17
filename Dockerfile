@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 FROM python:3.12-slim-bookworm
 
-LABEL maintainer="backmc team"
+LABEL maintainer="backapp team"
 LABEL description="Zero-impact lightweight backup daemon and interactive TUI"
 
 # Prevent interactive prompts and Python output buffering
@@ -9,7 +9,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     BACKUP_JOBS_DIR=/etc/backup/jobs \
-    BACKMC_SOCKET_PATH=/var/run/backmc/backmc.sock
+    BACKAPP_SOCKET_PATH=/var/run/backapp/backapp.sock
 
 # Install core archive, compression, database clients, and util-linux (for ionice)
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -66,7 +66,7 @@ res = subprocess.run(["/usr/local/bin/rcon-cli-bin"] + new_args)\n\
 sys.exit(res.returncode)\n' > /usr/local/bin/rcon-cli \
     && chmod +x /usr/local/bin/rcon-cli
 
-# Setup backmc application directory
+# Setup backapp application directory
 WORKDIR /app
 
 # Copy dependency specifications first to leverage Docker cache
@@ -78,10 +78,10 @@ RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir .
 
 # Create default directories
-RUN mkdir -p /etc/backup/jobs /mnt/backups /var/run/backmc
+RUN mkdir -p /etc/backup/jobs /mnt/backups /var/run/backapp
 
-VOLUME ["/etc/backup/jobs", "/mnt/backups", "/var/run/backmc"]
+VOLUME ["/etc/backup/jobs", "/mnt/backups", "/var/run/backapp"]
 
 # Default entrypoint runs the background scheduler daemon
-ENTRYPOINT ["backmc"]
+ENTRYPOINT ["backapp"]
 CMD ["daemon"]

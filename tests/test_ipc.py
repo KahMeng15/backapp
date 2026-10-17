@@ -3,8 +3,8 @@
 import asyncio
 from pathlib import Path
 import pytest
-from backmc.daemon import BackupDaemon
-from backmc.ipc import IPCClient
+from backapp.daemon import BackupDaemon
+from backapp.ipc import IPCClient
 
 
 @pytest.mark.asyncio
@@ -27,7 +27,7 @@ source_dir: "/tmp"
     daemon.load_configurations()
     await daemon.ipc_server_start() if hasattr(daemon, "ipc_server_start") else None
     
-    from backmc.ipc import IPCServer
+    from backapp.ipc import IPCServer
     server = IPCServer(sock_path, daemon._handle_ipc_request)
     await server.start()
 

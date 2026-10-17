@@ -7,7 +7,7 @@ import os
 import subprocess
 from typing import List, Optional
 
-logger = logging.getLogger("backmc.hooks")
+logger = logging.getLogger("backapp.hooks")
 
 
 class HookExecutionError(Exception):

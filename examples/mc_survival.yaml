@@ -1,14 +1,75 @@
 # /etc/backup/jobs/mc_survival.yaml
 name: "mc_survival"
+
+# ==============================================================================
+# SCHEDULE CONFIGURATION (Cron Syntax & Descriptive Guide)
+# ==============================================================================
+# Format uses standard 5-part cron syntax:
+#
+#   ┌───────────── Minute (0 - 59)
+#   │ ┌───────────── Hour (0 - 23)
+#   │ │ ┌───────────── Day of the Month (1 - 31)
+#   │ │ │ ┌───────────── Month of the Year (1 - 12)
+#   │ │ │ │ ┌───────────── Day of the Week (0 - 6, where 0 is Sunday)
+#   │ │ │ │ │
+#   * * * * *
+#
+# Examples:
+#   "0 */4 * * *"   -> Run every 4 hours, on the hour (e.g. 00:00, 04:00, 08:00...)
+#   "0 2 * * *"     -> Run daily at 02:00 AM
+#   "*/30 * * * *"  -> Run every 30 minutes
+#   "0 4 * * 0"     -> Run every Sunday morning at 04:00 AM
+#
+# Friendly shortcuts supported:
+#   "@hourly"       -> Every hour on minute 0 ("0 * * * *")
+#   "@daily"        -> Every midnight ("0 0 * * *")
+#   "@weekly"       -> Every Sunday at midnight ("0 0 * * 0")
+#   "every 4 hours" -> Every 4 hours ("0 */4 * * *")
+# ==============================================================================
 schedule: "0 */4 * * *"
-format: "tar.zst" # tar.gz, tar.zst, zip
+
+# Archive format: tar.zst (fastest & best compression), tar.gz, or zip
+format: "tar.zst"
+
+# Source world directory and backup destination
 source_dir: "/data/minecraft_world"
 output_dir: "/mnt/backups/minecraft"
+
+# ==============================================================================
+# RETENTION POLICY: Grandfather-Father-Son (GFS) or Simple Keep Last
+# ==============================================================================
 retention:
+  # Unconditionally keep the newest N backups
   keep_last: 10
+
+  # GFS (Grandfather-Father-Son) Backup Rotation:
+  # Automatically preserves daily, weekly, monthly, and yearly historical snapshots.
+  gfs:
+    keep_hourly: 24   # Keep 1 snapshot per hour for the last 24 hours
+    keep_daily: 7     # Son: Keep 1 snapshot per day for the last 7 days
+    keep_weekly: 4    # Father: Keep 1 snapshot per week for the last 4 weeks
+    keep_monthly: 12  # Grandfather: Keep 1 snapshot per month for the last 12 months
+    keep_yearly: 1    # Great-Grandfather: Keep 1 snapshot per year for the last 1 year
+
+# ==============================================================================
+# WEBHOOK NOTIFICATIONS (Discord, Slack, or Generic HTTP Webhook)
+# ==============================================================================
+# Sends rich Discord embeds when backups start and complete (with duration & file size).
+# Can also be set globally via environment variable: DISCORD_WEBHOOK_URL
+notifications:
+  discord_webhook: "$DISCORD_WEBHOOK_URL"  # e.g. "https://discord.com/api/webhooks/..."
+  on_start: true    # Notify when backup starts
+  on_success: true  # Notify with green embed when backup succeeds
+  on_failure: true  # Notify with red alert embed if backup fails
+
+# Pre/Post hooks (guaranteed finally execution for save-on)
 hooks:
   pre:
     - 'rcon-cli -H mc_srv -P 25575 -p "$RCON_PASS" "save-off"'
     - 'rcon-cli -H mc_srv -P 25575 -p "$RCON_PASS" "save-all flush"'
   post:
     - 'rcon-cli -H mc_srv -P 25575 -p "$RCON_PASS" "save-on"'
+
+exclude:
+  - "*.lock"
+  - "cache/*"

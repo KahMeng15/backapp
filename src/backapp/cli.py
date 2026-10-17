@@ -1,4 +1,4 @@
-"""CLI interface for backmc daemon, TUI, and command-line operations."""
+"""CLI interface for backapp daemon, TUI, and command-line operations."""
 
 from __future__ import annotations
 
@@ -13,12 +13,12 @@ from typing import Optional
 from rich.console import Console
 from rich.table import Table
 
-from backmc import __version__
-from backmc.config import ConfigError, load_job_file, load_jobs_from_directory
-from backmc.daemon import BackupDaemon
-from backmc.engine import BackupEngine, format_bytes, get_restore_command
-from backmc.ipc import IPCClient, resolve_socket_path
-from backmc.retention import apply_retention, list_job_backups
+from backapp import __version__
+from backapp.config import ConfigError, load_job_file, load_jobs_from_directory
+from backapp.daemon import BackupDaemon
+from backapp.engine import BackupEngine, format_bytes, get_restore_command
+from backapp.ipc import IPCClient, resolve_socket_path
+from backapp.retention import apply_retention, list_job_backups
 
 console = Console()
 
@@ -33,12 +33,12 @@ def setup_logging(level_name: str = "INFO") -> None:
 
 
 def cmd_daemon(args: argparse.Namespace) -> int:
-    """Run the backmc scheduler daemon."""
+    """Run the backapp scheduler daemon."""
     setup_logging(args.log_level)
     jobs_dir = Path(args.jobs_dir)
     socket_path = Path(args.socket_path) if args.socket_path else resolve_socket_path()
 
-    console.print(f"[bold cyan]backmc daemon v{__version__}[/bold cyan]")
+    console.print(f"[bold cyan]backapp daemon v{__version__}[/bold cyan]")
     console.print(f"Jobs directory: [green]{jobs_dir}[/green]")
     console.print(f"IPC socket:     [green]{socket_path}[/green]")
     console.print("Priority wrap:  [bold yellow]nice -n 19 ionice -c 3[/bold yellow]")
@@ -57,12 +57,12 @@ def cmd_daemon(args: argparse.Namespace) -> int:
 
 def cmd_tui(args: argparse.Namespace) -> int:
     """Launch the interactive Textual TUI dashboard."""
-    from backmc.tui import BackmcApp
+    from backapp.tui import BackappApp
 
     jobs_dir = Path(args.jobs_dir)
     socket_path = Path(args.socket_path) if args.socket_path else resolve_socket_path()
 
-    app = BackmcApp(jobs_dir=jobs_dir, socket_path=socket_path)
+    app = BackappApp(jobs_dir=jobs_dir, socket_path=socket_path)
     app.run()
     return 0
 
@@ -118,20 +118,14 @@ def cmd_list(args: argparse.Namespace) -> int:
     socket_path = Path(args.socket_path) if args.socket_path else resolve_socket_path()
     ipc = IPCClient(socket_path)
 
-    table = Table(title=f"backmc Configured Jobs ({jobs_dir})", header_style="bold cyan")
+    table = Table(title=f"backapp Configured Jobs ({jobs_dir})", header_style="bold cyan")
     table.add_column("Job Name", style="bold white")
     table.add_column("Type")
     table.add_column("Schedule")
     table.add_column("Format")
     table.add_column("Output Dir")
-    table.add_column("Keep Last")
+    table.add_column("Retention Policy")
     table.add_column("Backups Count")
-
-    if ipc.is_daemon_running():
-        resp = ipc.send_request({"action": "status"})
-        daemon_jobs = resp.get("data", {}).get("jobs", {})
-    else:
-        daemon_jobs = {}
 
     try:
         jobs = load_jobs_from_directory(jobs_dir)
@@ -145,13 +139,24 @@ def cmd_list(args: argparse.Namespace) -> int:
 
     for name, job in jobs.items():
         backups = list_job_backups(job)
+        if job.retention.gfs and job.retention.gfs.is_enabled:
+            g = job.retention.gfs
+            parts = []
+            if g.keep_daily: parts.append(f"D:{g.keep_daily}")
+            if g.keep_weekly: parts.append(f"W:{g.keep_weekly}")
+            if g.keep_monthly: parts.append(f"M:{g.keep_monthly}")
+            if g.keep_yearly: parts.append(f"Y:{g.keep_yearly}")
+            ret_str = f"GFS ({', '.join(parts)})"
+        else:
+            ret_str = f"Last {job.retention.keep_last}"
+
         table.add_row(
             job.name,
             job.type,
             job.schedule or "Manual",
             job.format,
             str(job.output_dir),
-            str(job.retention.keep_last),
+            ret_str,
             str(len(backups)),
         )
 
@@ -210,7 +215,9 @@ def cmd_validate(args: argparse.Namespace) -> int:
     for f in sorted(yaml_files):
         try:
             job = load_job_file(f)
-            console.print(f"  [green]✔ {f.name}[/green] -> valid (job={job.name}, type={job.type}, fmt={job.format})")
+            ret_mode = "GFS" if (job.retention.gfs and job.retention.gfs.is_enabled) else f"keep_last={job.retention.keep_last}"
+            webhook_status = "webhook enabled" if job.notifications.url else "no webhook"
+            console.print(f"  [green]✔ {f.name}[/green] -> valid (job={job.name}, type={job.type}, fmt={job.format}, {ret_mode}, {webhook_status})")
         except ConfigError as e:
             console.print(f"  [red]✖ {f.name}[/red] -> validation error: {e}")
             errors += 1
@@ -238,7 +245,7 @@ def main() -> None:
     common_parser.add_argument(
         "--socket-path",
         default=None,
-        help="Path to IPC UNIX domain socket (default: /var/run/backmc/backmc.sock or /tmp/backmc.sock)",
+        help="Path to IPC UNIX domain socket (default: /var/run/backapp/backapp.sock or /tmp/backapp.sock)",
     )
     common_parser.add_argument(
         "--log-level",
@@ -248,7 +255,7 @@ def main() -> None:
     )
 
     parser = argparse.ArgumentParser(
-        prog="backmc",
+        prog="backapp",
         description="Zero-impact production backup daemon and TUI for Minecraft, PostgreSQL, and MySQL.",
         parents=[common_parser],
     )
